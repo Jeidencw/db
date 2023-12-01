@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.0.1/firebase-app.js"
-import { getFirestore, collection, getDocs, addDoc, serverTimestamp, doc, deleteDoc } from 'https://www.gstatic.com/firebasejs/9.0.1/firebase-firestore.js'
+import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from 'https://www.gstatic.com/firebasejs/9.0.1/firebase-firestore.js'
 
 const firebaseConfig = {
     apiKey: "AIzaSyCpBp8sIrWssPIFchXntgf91r7luGwIvjc",
@@ -18,38 +18,60 @@ const collectionGame = collection(db, 'games')
 const gamesList = document.querySelector('[data-js="games-list"]')
 const formAddGame = document.querySelector('[data-js="add-game-form"]')
 
-getDocs(collectionGame)
-    .then(querySnapshot => {
-        //querySnapshot.forEach((doc) => console.log(doc.id, " => ", doc.data()))
-        //querySnapshot.docs.forEach(doc => console.log(doc.id, " => ", doc.data()))
+const sanitize = string => DOMPurify.sanitize(string)
 
-        const gamesLis = querySnapshot.docs.reduce((acc, doc) => {
-            const { title, developedBy, createdAt } = doc.data()
+const getFormattedDate = createdAt => new Intl
+    .DateTimeFormat('pt-BR', { dataStyle: 'short', timeStyle: 'short' })
+    .format(createdAt.toDate())
 
-            acc += `<li data-id="${doc.id}" class="my-4">
-                        <h5>${title}</h5>
+onSnapshot(collectionGame, querySnapshot => {
+    if(!querySnapshot.metadata.hasPendingWrites){
+        gamesList.innerHTML = ''
 
-                        <ul>
-                            <li>Desenvolvido por ${developedBy}</li>
-                            <li>Adicionado no banco em ${createdAt.toDate()}</li>
-                        </ul>
+        const games = querySnapshot.docs.map(doc => {
+            const [id, { title, developedBy, createdAt }] = [doc.id, doc.data()]
 
-                        <button data-remove="${doc.id}" class="btn btn-danger btn-sm mt-2">Remover</button>
-                   </li>`
+            const liGame = document.createElement('li')
+            liGame.setAttribute('data-id', id)
+            liGame.setAttribute('class', 'my-4')
 
-            return acc
-        }, '')
+            const h5 = document.createElement('h5')
+            h5.textContent = sanitize(title)
 
-        gamesList.innerHTML = gamesLis
-    })
-    .catch(console.log())
+            const ul = document.createElement('ul')
+
+            const liDevelopedBy = document.createElement('li')
+            liDevelopedBy.textContent = `Desenvolvido por ${sanitize(developedBy)}`
+
+            ul.append(liDevelopedBy)
+
+            if(createdAt){
+                const liDate = document.createElement('li')
+                liDate.textContent = `Adicionado no banco em: ${getFormattedDate(createdAt)}`
+                ul.append(liDate)
+            }
+
+            const button = document.createElement('button')
+            button.textContent = 'Remover'
+            button.setAttribute('data-remove', id)
+            button.setAttribute('class', 'btn btn-danger btm-sm')
+
+
+            liGame.append(h5, ul, button)
+
+            return liGame
+        })
+
+        games.forEach(game => gamesList.append(game))
+    }
+})
 
 formAddGame.addEventListener('submit', e => {
     e.preventDefault()
 
     addDoc(collectionGame, {
-        title: e.target.title.value,
-        developedBy: e.target.developer.value,
+        title: sanitize(e.target.title.value),
+        developedBy: sanitize(e.target.developer.value),
         createdAt: serverTimestamp()
     })
     .then(doc => console.log('Documento criado com o id: ', doc.id))
@@ -62,8 +84,7 @@ gamesList.addEventListener('click', e => {
     if(idRemoveButton){      
         deleteDoc(doc(db, 'games', idRemoveButton))
             .then(() => {
-                const game = document.querySelector(`[data-id="${idRemoveButton}"]`)
-                game.remove()
+                console.log('Deletado')
             })
             .catch(console.log)
     }
